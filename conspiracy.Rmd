@@ -1,0 +1,258 @@
+---
+title: "conspiracy"
+author: "Angelina Lu"
+date: "2025-03-18"
+output: pdf_document
+---
+
+
+```{r,warning=FALSE}
+library(tidytext)
+library(RedditExtractoR)
+```
+
+## Collecting reddit data
+```{r}
+#subreddit = conspiracy
+vaccines_urls <- find_thread_urls(keywords = "vaccines",
+                                       subreddit = "conspiracy",
+                                       sort_by = "top",
+                                       period = "month")
+
+vaccine_mandate_urls <- find_thread_urls(keywords = "vaccine mandate",
+                                       subreddit = "conspiracy",
+                                       sort_by = "top",
+                                       period = "month")
+
+flu_shot_urls <- find_thread_urls(keywords = "flu shot",
+                                       subreddit = "conspiracy",
+                                       sort_by = "top",
+                                       period = "month")
+
+childhood_vaccines_urls <- find_thread_urls(keywords = "childhood vaccines",
+                                       subreddit = "conspiracy",
+                                       sort_by = "top",
+                                       period = "month")
+
+COVID19_vaccine_urls <- find_thread_urls(keywords = "COVID-19 vaccine",
+                                       subreddit = "conspiracy",
+                                       sort_by = "top",
+                                       period = "month")
+
+MMR_vaccine_urls <- find_thread_urls(keywords = "MMR vaccine",
+                                       subreddit = "conspiracy",
+                                       sort_by = "top",
+                                       period = "month")
+
+anti_vaccine_urls <- find_thread_urls(keywords = "anti-vaccine",
+                                       subreddit = "conspiracy",
+                                       sort_by = "top",
+                                       period = "month")
+```
+
+```{r}
+all_posts <- list(vaccines_urls, vaccine_mandate_urls, flu_shot_urls, childhood_vaccines_urls, COVID19_vaccine_urls, MMR_vaccine_urls, anti_vaccine_urls)
+
+combined_posts <- do.call(rbind, all_posts)
+
+write.csv(combined_posts, file = "conspiracy.csv", row.names = FALSE)
+```
+
+
+```{r}
+conspiracy_posts <- read.csv("conspiracy.csv")
+```
+
+```{r}
+comments_conspiracy <- data.frame()
+
+for (url in conspiracy_posts$url) {
+  Sys.sleep(5)  
+  
+  # try fetching the thread content
+  thread_content <- tryCatch(
+    get_thread_content(url),
+    error = function(e) {
+      message("Error fetching URL: ", url)
+      return(NULL)
+    }
+  )
+  
+  if (!is.null(thread_content)) {
+    comments <- thread_content$comments
+    comments_conspiracy <- rbind(comments_conspiracy, comments)
+  }
+}
+
+
+write.csv(comments_conspiracy, file = "comments_conspiracy.csv", row.names = FALSE)
+```
+
+## Cleaning Data
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+```
+
+
+```{r}
+str(comments_conspiracy)
+
+colSums(is.na(comments_conspiracy)) # check NA
+colSums(comments_conspiracy == "") # check empty comments
+
+comments_cleaned <- comments_conspiracy %>%
+  filter(!is.na(comment) & comment != "")  # delete Na and empty comments
+
+comments_cleaned <- comments_cleaned %>%
+  filter(author != "[deleted]", comment != "[removed]")
+
+comments_cleaned <- comments_cleaned %>%
+  mutate(
+    date = as.Date(date, format = "%Y-%m-%d"), 
+    timestamp = as.POSIXct(timestamp, origin = "1970-01-01") 
+  ) # date format
+
+comments_cleaned <- comments_cleaned %>%
+  mutate(
+    comment = tolower(comment),  # Unified to lowercase
+    comment = str_replace_all(comment, "http[s]?://\\S+", ""),  # remove URL
+    comment = str_replace_all(comment, "[[:punct:]]", ""),  # remove punctuation
+    comment = str_replace_all(comment, "[[:digit:]]", ""),  # remove numbers
+    comment = str_trim(comment)  # remove leading and trailing spaces
+  ) 
+
+comments_cleaned <- comments_cleaned %>%
+  filter(nchar(comment) > 10) # delete too short comments
+
+comments_cleaned <- comments_cleaned %>%
+  distinct() # remove repulicated value
+
+glimpse(comments_cleaned)
+head(comments_cleaned)
+
+write.csv(comments_cleaned, file = "cleaned_conspiracy1.csv", row.names = FALSE)
+```
+
+## Word Frequency
+```{r}
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+```{r}
+comments_cleaned$comment <- as.character(comments_cleaned$comment)
+
+word_counts_raw <- comments_cleaned %>% 
+  unnest_tokens(word, comment) %>%
+  count(word, sort = TRUE)
+
+head(word_counts_raw, 20)
+
+top_words <- word_counts_raw %>%
+  slice_max(n, n = 20)  # top 20 words
+
+ggplot(top_words, aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +  # rotate graph
+  labs(title = "Top 20 Most Frequent Words in Reddit Comments",
+       x = "Words", y = "Frequency") +
+  theme_minimal()
+
+```
+
+
+
+## Stop Words
+```{r}
+# remove stop words
+data("stop_words")
+
+word_counts <- comments_cleaned %>%
+  unnest_tokens(word, comment) %>%
+  anti_join(stop_words, by = "word") %>% 
+  count(word, sort = TRUE)
+
+head(word_counts, 20)
+
+top_words_stop <- word_counts %>%
+  slice_max(n, n = 20)
+
+ggplot(top_words_stop, aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 20 Most Frequent Words (Filtered)",
+       x = "Words", y = "Frequency") +
+  theme_minimal()
+
+```
+
+
+```{r}
+comments_cleaned <- comments_cleaned %>%
+  group_by(comment_id, author, score, created_utc) %>%
+  summarize(cleaned_text = paste(word, collapse = " "), .groups = "drop")
+
+# delete short words
+comments_cleaned <- comments_cleaned %>%
+  filter(str_count(cleaned_text, "\\w+") > 2)  
+
+custom_stop_words <- c("like", "just", "one", "know", "people")
+word_counts <- word_counts %>%
+  filter(!word %in% custom_stop_words)
+
+```
+
+# Observing thrend
+```{r}
+library(ggplot2)
+library(readr)
+library(lubridate)
+```
+
+```{r}
+threads <- read_csv("conspiracy.csv")
+comments <- read_csv("comments_conspiracy.csv")
+```
+
+```{r}
+threads <- threads %>%
+  mutate(date = as.Date(date_utc, format = "%Y-%m-%d"))
+
+comments <- comments %>%
+  mutate(date = as.Date(as.POSIXct(timestamp, origin = "1970-01-01", tz = "UTC")))
+
+```
+
+# Is there a relationship between events and frequency of tweets?
+# Counting threads and comments by day
+```{r}
+threads_count <- threads %>%
+  group_by(date) %>%
+  summarise(num_threads = n(), .groups = "drop")
+
+comments_count <- comments %>%
+  group_by(date) %>%
+  summarise(num_comments = n(), .groups = "drop")
+
+daily_counts <- full_join(threads_count, comments_count, by = "date") %>%
+  replace_na(list(num_threads = 0, num_comments = 0)) %>%
+  arrange(date)
+
+print(daily_counts)
+```
+
+# Is there a pattern with respect to the time of day or day of week when posts were created?
+# Visualization
+```{r}
+ggplot(daily_counts, aes(x = date)) +
+  geom_line(aes(y = num_threads, color = "Threads"), size = 1) +
+  geom_line(aes(y = num_comments, color = "Comments"), size = 1) +
+  labs(title = "Daily Threads and Comments in r/conspiracy",
+       x = "Date", y = "Count") +
+  scale_color_manual(values = c("Threads" = "blue", "Comments" = "red")) +
+  theme_minimal()
+```
