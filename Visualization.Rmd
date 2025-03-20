@@ -1,0 +1,57 @@
+---
+title: "Visualization"
+author: "Angelina Lu"
+date: "2025-03-19"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(DT)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+library(lubridate)
+
+threads <- read_csv("merged_thread.csv")
+comments <- read_csv("merged_data.csv")
+
+threads <- threads %>%
+  mutate(date = as.Date(date_utc, format = "%Y-%m-%d"))
+
+comments <- comments %>%
+  mutate(date = as.Date(as.POSIXct(as.numeric(timestamp), origin = "1970-01-01", tz = "UTC")))
+
+# Is there a relationship between events and frequency of tweets?
+# Counting threads and comments by day
+threads_count <- threads %>%
+  group_by(date) %>%
+  summarise(num_threads = n(), .groups = "drop")
+
+comments_count <- comments %>%
+  group_by(date) %>%
+  summarise(num_comments = n(), .groups = "drop")
+
+daily_counts <- full_join(threads_count, comments_count, by = "date") %>%
+  replace_na(list(num_threads = 0, num_comments = 0)) %>%
+  arrange(date)
+
+datatable(daily_counts, options = list(pageLength = 50, autoWidth = TRUE))
+
+# Is there a pattern with respect to the time of day or day of week when posts were created?
+# Visualization
+ggplot(daily_counts, aes(x = date)) +
+  geom_line(aes(y = num_threads, color = "Threads"), size = 1) +
+  geom_line(aes(y = num_comments, color = "Comments"), size = 1) +
+  labs(title = "Daily Threads and Comments in r/conspiracy",
+       x = "Date", y = "Count") +
+  scale_color_manual(values = c("Threads" = "blue", "Comments" = "red")) +
+  theme_minimal()
+```
