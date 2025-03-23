@@ -1,0 +1,107 @@
+---
+title: "Word Frequency"
+author: "Kailin Xu"
+date: "2025-03-19"
+output:
+  pdf_document:
+    latex_engine: xelatex
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+csv1 <- read.csv("cleaned_vaxxhappened1.csv")
+csv2 <- read.csv("cleaned_conspiracy1.csv")
+csv3 <- read.csv("cleaned_HermanCainAward1.csv")
+csv4 <- read.csv("cleaned_politics1.csv")
+
+merged_data <- rbind(csv1, csv2, csv3, csv4)
+
+write.csv(merged_data, file = "merged_data.csv", row.names = FALSE)
+
+```
+
+## Word Frequency
+```{r,message=FALSE}
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidyr)
+```
+
+```{r}
+merged_data$comment <- as.character(merged_data$comment)
+
+word_counts_raw <- merged_data %>% 
+  unnest_tokens(word, comment) %>%
+  count(word, sort = TRUE)
+
+head(word_counts_raw, 20)
+
+top_words <- word_counts_raw %>%
+  slice_max(n, n = 20)  # top 20 words
+
+ggplot(top_words, aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +  # rotate graph
+  labs(title = "Top 20 Most Frequent Words in Reddit Comments",
+       x = "Words", y = "Frequency") +
+  theme_minimal()
+
+```
+## stop words
+```{r}
+# remove stop words
+data("stop_words")
+
+word_counts <- merged_data %>%
+  unnest_tokens(word, comment) %>%
+  anti_join(stop_words, by = "word") %>% 
+  count(word, sort = TRUE)
+
+head(word_counts, 20)
+
+top_words_stop <- word_counts %>%
+  slice_max(n, n = 30)
+
+ggplot(top_words_stop, aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "red") +
+  coord_flip() +
+  labs(title = "Top 30 Most Frequent Words (Filtered)",
+       x = "Words", y = "Frequency") +
+  theme_minimal()
+```
+## add more stop words
+```{r}
+custom_stop_words <- c( "don","im","comment","didnt","youre","time","people","dont") 
+
+top_words_custom <- word_counts %>%
+  filter(!word %in% custom_stop_words) %>% 
+  slice_max(n, n = 20)
+
+top_words_custom
+
+ggplot(top_words_custom, aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "orange") +
+  coord_flip() +
+  labs(title = "Top 20 Most Frequent Words (cleaned)",
+       x = "Words", y = "Frequency") +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
