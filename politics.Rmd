@@ -1,6 +1,6 @@
 ---
 title: "politics"
-author: "Angelina Lu"
+author: "Angelina Lu, Johnia Johansen Kakiziba, Kailin Xu, Kehinde Adeniyi
 date: "2025-03-18"
 output: pdf_document
 ---
