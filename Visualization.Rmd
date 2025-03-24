@@ -1,6 +1,6 @@
 ---
 title: "Visualization"
-author: "Angelina Lu"
+author: "Angelina Lu, Johnia Johansen Kakiziba, Kailin Xu, Kehinde Adeniyi
 date: "2025-03-19"
 output:
   html_document:
