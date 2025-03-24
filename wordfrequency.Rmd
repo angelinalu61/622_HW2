@@ -1,6 +1,6 @@
 ---
 title: "Word Frequency"
-author: "Kailin Xu"
+author: "Angelina Lu, Johnia Johansen Kakiziba, Kailin Xu, Kehinde Adeniyi
 date: "2025-03-19"
 output:
   pdf_document:
